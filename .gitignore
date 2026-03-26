@@ -1,0 +1,66 @@
+# === Python === #
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# === macOS === #
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+
+# === JetBrains / PyCharm === #
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# === VS Code / Cursor === #
+.vscode/
+
+# === Environment variables === #
+.env
+.env.*
+!.env.example
+
+# === Logs === #
+*.log
+
+# === Testing / Coverage === #
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+
+# === Distribution / Packaging === #
+*.tar.gz
+*.whl
+
+# === Misc === #
+*.swp
+*.swo
+*~
