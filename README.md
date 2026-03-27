@@ -4,6 +4,10 @@
 
 ## Getting Started
 
+### Dataset
+
+Please download the dataset from the provided source (as given by the COMP4442 lecturer) and rename it to `dataset`. The dataset should contain a subdirectory named `detail-record` that includes the complete set of data records.
+
 ### Prerequisites
 
 - Python 3.12
