@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driver Behavior Analysis</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/summary.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+
+  <header class="titlebar">
+    <div class="titlebar-inner">
+      <h1 class="titlebar-text">Driver Behavior Analysis, Project "Harpy Eagle"</h1>
+    </div>
+  </header>
+
+  <nav class="tab-bar">
+    <button class="tab active" data-tab="summary">Behavior Summary</button>
+    <button class="tab" data-tab="monitor">Speed Monitor</button>
+  </nav>
+
+  <main class="content">
+    {% include "summary.html" %}
+    {% include "monitor.html" %}
+  </main>
+
+  <footer class="footer">
+    <p>COMP4442 Service &amp; Cloud Computing Group Project, Project "Harpy Eagle"</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/tabs.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/summary.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/monitor.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<section id="panel-monitor" class="panel">
+  <div class="panel-header">
+    <h2>Real-Time Speed Monitor</h2>
+    <p class="subtitle">Select a driver to monitor driving speed — refreshes every 30 seconds</p>
+  </div>
+
+  <div class="monitor-controls">
+    <label for="driver-select">Driver:</label>
+    <select id="driver-select" class="aqua-select">
+      <option value="">-- Select a driver --</option>
+    </select>
+    <button id="btn-start" class="aqua-btn" disabled>Start Monitoring</button>
+    <button id="btn-stop" class="aqua-btn btn-danger" disabled>Stop</button>
+    <span id="monitor-status" class="status-badge">Idle</span>
+  </div>
+
+  <div id="overspeed-alert" class="alert hidden">
+    ⚠ Warning: Overspeed detected!
+  </div>
+
+  <div class="chart-container">
+    <canvas id="speed-chart"></canvas>
+  </div>
+
+  <div class="monitor-info">
+    <span id="next-refresh">Next refresh: —</span>
+  </div>
+</section>

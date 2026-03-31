@@ -1,0 +1,52 @@
+/* Function A — Summary table */
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid #b0b0b0;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+#summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+#summary-table thead th {
+  position: sticky;
+  top: 0;
+  background:
+    linear-gradient(180deg, #e8edf5 0%, #c4ccdb 100%);
+  color: #333;
+  font-weight: 600;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  padding: 10px 12px;
+  border-bottom: 1px solid #999;
+  border-right: 1px solid #ccc;
+  white-space: nowrap;
+  text-align: left;
+}
+
+#summary-table thead th:last-child {
+  border-right: none;
+}
+
+#summary-table tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e0e0e0;
+  border-right: 1px solid #eee;
+  white-space: nowrap;
+}
+
+#summary-table tbody td:last-child {
+  border-right: none;
+}
+
+#summary-table tbody tr:nth-child(even) {
+  background: #f5f7fb;
+}
+
+#summary-table tbody tr:hover {
+  background: #dce4f2;
+}
