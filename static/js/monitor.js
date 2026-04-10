@@ -8,6 +8,7 @@
   var btnStop = document.getElementById("btn-stop");
   var statusBadge = document.getElementById("monitor-status");
   var alertBox = document.getElementById("overspeed-alert");
+  var panelStatus = document.getElementById("monitor-panel-status");
   var refreshInfo = document.getElementById("next-refresh");
 
   var chart = null;
@@ -21,16 +22,61 @@
   var chartSpeeds = [];
   var chartOverspeed = [];
 
+  function setPanelStatus(message, isError) {
+    panelStatus.textContent = message;
+    panelStatus.classList.toggle("hidden", !message);
+    panelStatus.classList.toggle("is-error", !!message && !!isError);
+  }
+
+  function resetMonitorUi() {
+    clearInterval(intervalId);
+    intervalId = null;
+    stopCountdown();
+    driverSelect.disabled = false;
+    btnStart.disabled = !driverSelect.value;
+    btnStop.disabled = true;
+    statusBadge.textContent = "Idle";
+    statusBadge.classList.remove("running");
+  }
+
+  function handleMonitoringError(err) {
+    resetMonitorUi();
+    setPanelStatus(err.message || "Unable to load speed data.", true);
+  }
+
+  function clearChartData() {
+    chartLabels.length = 0;
+    chartSpeeds.length = 0;
+    chartOverspeed.length = 0;
+    alertBox.classList.add("hidden");
+
+    if (chart) {
+      chart.data.datasets[1].data = [];
+      chart.update();
+    }
+  }
+
   // driver dropdown list
   async function loadDrivers() {
-    var resp = await fetch("/api/drivers");
-    var drivers = await resp.json();
-    drivers.forEach(function (id) {
-      var opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = id;
-      driverSelect.appendChild(opt);
-    });
+    try {
+      var resp = await fetch("/api/drivers");
+      var drivers = await resp.json();
+      if (!resp.ok) {
+        throw new Error(drivers.error || "Unable to load drivers.");
+      }
+
+      drivers.forEach(function (id) {
+        var opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = id;
+        driverSelect.appendChild(opt);
+      });
+      setPanelStatus("", false);
+    } catch (err) {
+      driverSelect.disabled = true;
+      btnStart.disabled = true;
+      setPanelStatus(err.message, true);
+    }
   }
 
   loadDrivers();
@@ -96,12 +142,22 @@
     var url = "/api/speed/" + driverId + "?offset=" + currentOffset + "&limit=" + BATCH_SIZE;
     var resp = await fetch(url);
     var body = await resp.json();
+    if (!resp.ok) {
+      throw new Error(body.error || "Unable to load speed data.");
+    }
+    if (!body || !Array.isArray(body.records)) {
+      throw new Error("The speed-monitor response had an unexpected format.");
+    }
+
     if (body.count === 0) {
-      currentOffset = 0;
-      chartLabels.length = 0;
-      chartSpeeds.length = 0;
-      chartOverspeed.length = 0;
-      chart.update();
+      if (currentOffset > 0) {
+        currentOffset = 0;
+        clearChartData();
+        return fetchBatch();
+      }
+
+      clearChartData();
+      setPanelStatus("No speed data was generated for this driver yet.", false);
       return;
     }
 
@@ -132,6 +188,8 @@
     } else {
       alertBox.classList.add("hidden");
     }
+
+    setPanelStatus("", false);
   }
 
   // Countdown display
@@ -154,7 +212,7 @@
     refreshInfo.textContent = "Next refresh: \u2014";
   }
 
-  btnStart.addEventListener("click", function () {
+  btnStart.addEventListener("click", async function () {
     if (!driverSelect.value) return;
 
     driverSelect.disabled = true;
@@ -164,27 +222,23 @@
     statusBadge.classList.add("running");
 
     currentOffset = 0;
-    chartLabels.length = 0;
-    chartSpeeds.length = 0;
-    chartOverspeed.length = 0;
-    alertBox.classList.add("hidden");
 
     if (chart) chart.destroy();
     initChart();
+    clearChartData();
 
-    intervalId = setInterval(fetchBatch, REFRESH_MS);
-    startCountdown();
+    try {
+      await fetchBatch();
+      intervalId = setInterval(function () {
+        fetchBatch().catch(handleMonitoringError);
+      }, REFRESH_MS);
+      startCountdown();
+    } catch (err) {
+      handleMonitoringError(err);
+    }
   });
 
   btnStop.addEventListener("click", function () {
-    clearInterval(intervalId);
-    intervalId = null;
-    stopCountdown();
-
-    driverSelect.disabled = false;
-    btnStart.disabled = false;
-    btnStop.disabled = true;
-    statusBadge.textContent = "Idle";
-    statusBadge.classList.remove("running");
+    resetMonitorUi();
   });
 })();

@@ -16,8 +16,8 @@ If you have not set up the virtual environment yet, run the following commands f
 
 ```bash
 cd path/to/project-harpy-eagle
-python -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -30,7 +30,7 @@ brew install openjdk@17
 ### Run
 
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
 python spark/spark_analysis.py
 ```
@@ -56,3 +56,5 @@ Example with custom paths:
 ```bash
 python spark/spark_analysis.py --input /path/to/data/ --output /path/to/output/
 ```
+
+After the script finishes, start the Flask app from the project root with `python app.py`.

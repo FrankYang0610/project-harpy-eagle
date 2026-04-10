@@ -111,6 +111,20 @@ body {
   padding: 0 16px 24px;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.app-notice {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid #c69219;
+  border-radius: 8px;
+  color: #6b4d00;
+  background: linear-gradient(180deg, #fff6db 0%, #f8e8b8 100%);
+  box-shadow: 0 1px 4px rgba(120, 88, 15, 0.12);
+}
+
 .panel {
   display: none;
   background: #fff;
@@ -141,6 +155,21 @@ body {
   font-size: 12px;
   color: #777;
   margin-top: 4px;
+}
+
+.panel-status {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid #cfd5df;
+  border-radius: 6px;
+  color: #4a5568;
+  background: #f6f8fb;
+}
+
+.panel-status.is-error {
+  border-color: #d08d8d;
+  color: #8a2020;
+  background: #fff2f2;
 }
 
 /* Shared Aqua controls */

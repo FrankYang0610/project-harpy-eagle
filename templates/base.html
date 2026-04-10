@@ -23,6 +23,12 @@
   </nav>
 
   <main class="content">
+    {% if not results_status.ready %}
+      <div class="app-notice" role="status" aria-live="polite">
+        {{ results_status.message }}
+      </div>
+    {% endif %}
+
     {% include "summary.html" %}
     {% include "monitor.html" %}
   </main>

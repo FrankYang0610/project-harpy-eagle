@@ -4,6 +4,8 @@
     <p class="subtitle">Select a driver to monitor driving speed — refreshes every 30 seconds</p>
   </div>
 
+  <p id="monitor-panel-status" class="panel-status hidden" role="status" aria-live="polite"></p>
+
   <div class="monitor-controls">
     <label for="driver-select">Driver:</label>
     <select id="driver-select" class="aqua-select">
@@ -14,7 +16,7 @@
     <span id="monitor-status" class="status-badge">Idle</span>
   </div>
 
-  <div id="overspeed-alert" class="alert hidden">
+  <div id="overspeed-alert" class="alert hidden" role="alert" aria-live="assertive">
     ⚠ Warning: Overspeed detected!
   </div>
 
