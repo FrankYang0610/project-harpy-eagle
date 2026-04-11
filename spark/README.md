@@ -16,7 +16,7 @@ The supported project deployment path is:
 
 #### Set Up Python Environment
 
-If you have not set up the virtual environment yet, run the following commands from the project root:
+If the virtual environment has not been set up yet, run the following commands from the project root:
 
 ```bash
 cd path/to/project-harpy-eagle

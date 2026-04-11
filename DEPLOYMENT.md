@@ -41,18 +41,18 @@ Recommended instance size:
 
 - `t3.medium`
 
-If your instance is too small during the Spark step, resize that same instance temporarily and then resize it back later.
+If the instance is too small during the Spark step, resize that same instance temporarily and then resize it back later.
 
 Security group:
 
-- allow `22/tcp` from your IP
+- allow `22/tcp` from the administrator IP address
 
-Because this guide uses Cloudflare Tunnel, you do not need to expose `80/tcp` or `443/tcp` publicly.
+Because this guide uses Cloudflare Tunnel, `80/tcp` and `443/tcp` do not need to be exposed publicly.
 
 ### 2. Connect to the instance
 
 ```bash
-ssh -i /path/to/your-key.pem ubuntu@YOUR_EC2_PUBLIC_IP
+ssh -i /path/to/ec2-key.pem ubuntu@EC2_PUBLIC_IP
 ```
 
 ### 3. Install system packages
@@ -107,7 +107,7 @@ Your Spark script expects:
 dataset/detail-records/
 ```
 
-Since you said you will SFTP the dataset up separately, place the raw files under:
+Place the raw files under:
 
 ```text
 /opt/project-harpy-eagle/dataset/detail-records/
@@ -256,7 +256,7 @@ Copy the unit file:
 sudo cp deploy/systemd/project-harpy-eagle.service /etc/systemd/system/
 ```
 
-If your Linux username is not `ubuntu`, edit:
+If the Linux username is not `ubuntu`, edit:
 
 [project-harpy-eagle.service](/Users/jimyang/PycharmProjects/project-harpy-eagle/deploy/systemd/project-harpy-eagle.service)
 
@@ -288,9 +288,9 @@ curl http://127.0.0.1:8000/
 
 Before starting:
 
-- add your domain to Cloudflare
-- move your domain nameservers to Cloudflare
-- decide on the hostname you want to use, for example `harpy.example.com`
+- add the domain to Cloudflare
+- move the domain nameservers to Cloudflare
+- choose the public hostname, for example `harpy.example.com`
 
 ### 15. Install `cloudflared`
 
@@ -312,7 +312,7 @@ In the Cloudflare Zero Trust web console:
 2. create a new tunnel
 3. choose the `Cloudflared` connector type
 4. name it `project-harpy-eagle`
-5. keep the setup page open so you can copy the generated tunnel token
+5. keep the setup page open so the generated tunnel token can be copied
 
 This guide intentionally uses the web console flow only. No `cloudflared` config file is needed in the repository.
 
@@ -320,7 +320,7 @@ This guide intentionally uses the web console flow only. No `cloudflared` config
 
 Still in the Cloudflare dashboard, add a public hostname for the tunnel:
 
-- hostname: your chosen public name, for example `harpy.example.com`
+- hostname: the chosen public name, for example `harpy.example.com`
 - service type: `HTTP`
 - URL: `http://localhost:8000`
 
@@ -337,7 +337,7 @@ sudo systemctl start cloudflared
 sudo systemctl status cloudflared
 ```
 
-If the service was already started during install, `systemctl start` is harmless.
+If the service was already started during installation, `systemctl start` is harmless.
 
 ### 19. Verify the public hostname
 
@@ -350,7 +350,7 @@ curl http://127.0.0.1:8000/health
 Then open:
 
 ```text
-https://your-public-hostname.example.com
+https://PUBLIC_HOSTNAME
 ```
 
 If the tunnel is configured correctly, Cloudflare should proxy the request to local Gunicorn and the website should load.
@@ -366,7 +366,7 @@ Whenever the dataset changes:
    ```
 3. the website will read the updated JSON files from `results/`
 
-Because the website reads the JSON files on demand, you usually do not need to restart the web service after refreshing `results/`.
+Because the website reads the JSON files on demand, restarting the web service is usually unnecessary after refreshing `results/`.
 
 ## Troubleshooting
 
