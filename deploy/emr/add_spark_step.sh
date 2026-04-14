@@ -16,10 +16,12 @@ Arguments:
 
 Environment variables:
   SPARK_SCRIPT_URI  Optional override for the Spark script path
+  SPARK_PYFILES_URI Optional override for the Spark dependency bundle path
   SPARK_INPUT_URI   Optional override for the dataset prefix
   SPARK_SUMMARY_TABLE  Optional override for the DynamoDB summary table
   SPARK_EVENTS_TABLE   Optional override for the DynamoDB events table
   SPARK_LOG_LEVEL   Spark log level. Defaults to ERROR
+  SPARK_FULL_REFRESH  Optional. Set to 1 to clear and rebuild the target tables
   SPARK_AWS_REGION  Optional AWS region passed through to the Spark job
   AWS_REGION        Optional AWS region passed to the AWS CLI
 EOF
@@ -52,8 +54,10 @@ if ! command -v aws >/dev/null 2>&1; then
 fi
 
 SCRIPT_URI="${SPARK_SCRIPT_URI:-${S3_PREFIX%/}/code/spark_analysis.py}"
+PYFILES_URI="${SPARK_PYFILES_URI:-${S3_PREFIX%/}/code/spark_pyfiles.zip}"
 INPUT_URI="${SPARK_INPUT_URI:-${S3_PREFIX%/}/dataset/detail-records/}"
 SPARK_LOG_LEVEL="${SPARK_LOG_LEVEL:-ERROR}"
+SPARK_FULL_REFRESH="${SPARK_FULL_REFRESH:-0}"
 SPARK_AWS_REGION="${SPARK_AWS_REGION:-${AWS_REGION:-}}"
 
 AWS_ARGS=()
@@ -65,6 +69,8 @@ SPARK_ARGS=(
   "spark-submit"
   "--deploy-mode"
   "cluster"
+  "--py-files"
+  "${PYFILES_URI}"
   "${SCRIPT_URI}"
   "--input"
   "${INPUT_URI}"
@@ -81,6 +87,10 @@ if [[ -n "${SPARK_AWS_REGION}" ]]; then
       "--aws-region"
       "${SPARK_AWS_REGION}"
     )
+fi
+
+if [[ "${SPARK_FULL_REFRESH}" == "1" ]]; then
+    SPARK_ARGS+=(--full-refresh)
 fi
 
 read -r -d '' STEP_JSON <<EOF || true

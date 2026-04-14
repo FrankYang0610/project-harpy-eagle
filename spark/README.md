@@ -42,7 +42,13 @@ export AWS_REGION=ap-southeast-1
 
 This wrapper uses `spark-submit --master local[*]` and calls the same [spark_analysis.py](/Users/jimyang/PycharmProjects/project-harpy-eagle/spark/spark_analysis.py) entrypoint that EMR runs. The only runtime difference is the local Spark master; the DynamoDB write path is the same.
 
-The local wrapper is destructive with respect to its target tables. It clears the summary and events tables before rewriting them, exactly like the EMR job. Running the local wrapper against the same tables as an active EMR run will wipe and replace those rows.
+The default mode is idempotent upsert. The Spark job uses deterministic event keys, so rerunning the same dataset overwrites matching rows in place instead of clearing the tables first.
+
+To force a destructive rebuild, set:
+
+```bash
+export SPARK_FULL_REFRESH=1
+```
 
 ## Options
 
@@ -55,6 +61,7 @@ The local wrapper is destructive with respect to its target tables. It clears th
 | `--master` | unset | Spark master for local runs only |
 | `--app-name` | `DriverBehaviorAnalysis` | Spark application name |
 | `--log-level` | `ERROR` | Spark log level |
+| `--full-refresh` | unset | Optional destructive rebuild of the target tables |
 
 ## DynamoDB Output Schema
 
@@ -94,7 +101,11 @@ spark-submit --deploy-mode cluster \
   --aws-region ap-southeast-1
 ```
 
+To force a destructive rebuild on EMR, add `--full-refresh` to the Spark arguments or set `SPARK_FULL_REFRESH=1` when using [add_spark_step.sh](/Users/jimyang/PycharmProjects/project-harpy-eagle/deploy/emr/add_spark_step.sh).
+
 The helper script [add_spark_step.sh](/Users/jimyang/PycharmProjects/project-harpy-eagle/deploy/emr/add_spark_step.sh) submits the equivalent command as an EMR step.
+
+The EMR helper also passes `--py-files s3://.../code/spark_pyfiles.zip`. That bundle is uploaded by [upload_emr_assets_to_s3.sh](/Users/jimyang/PycharmProjects/project-harpy-eagle/scripts/upload_emr_assets_to_s3.sh) and contains the AWS SDK dependencies required by the Spark job.
 
 When the cluster is created in the EMR console, the EMR EC2 instance profile must include permission to write to the summary table and events table in DynamoDB. The Spark job uses the AWS SDK directly on the cluster nodes, so those table permissions must be available to the instance profile used by the EMR EC2 instances.
 
@@ -103,6 +114,7 @@ When the cluster is created in the EMR console, the EMR EC2 instance profile mus
 After a successful run:
 
 - the summary table should contain one item per driver
+- the summary items should show a fresh `analysis_generated_at` value for the latest run
 - the events table should contain one item per driving record
 
 Example verification commands:
@@ -115,3 +127,5 @@ aws dynamodb query \
   --expression-attribute-values '{":driver_id":{"S":"xiexiao1000001"}}' \
   --limit 5
 ```
+
+Do not use the DynamoDB console `ItemCount` as a live progress indicator while the Spark job is still running. Query the tables directly instead.

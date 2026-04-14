@@ -18,6 +18,7 @@ Environment variables:
   SPARK_MASTER              Optional Spark master. Defaults to local[*]
   SPARK_SHUFFLE_PARTITIONS  Optional shuffle partition count. Defaults to 16
   SPARK_LOG_LEVEL           Optional Spark log level. Defaults to ERROR
+  SPARK_FULL_REFRESH        Optional. Set to 1 to clear and rebuild the target tables
   SPARK_SUBMIT_BIN          Optional spark-submit binary path override
 
 Example:
@@ -27,10 +28,12 @@ Example:
     project-harpy-eagle-driver-summary \
     project-harpy-eagle-driver-events
 
-Warning:
-  This runner executes the same table-refresh logic as EMR. It clears the target
-  summary and events tables before rewriting them. Do not point it at the same
-  tables as a running EMR job unless replacing that data is intentional.
+Default mode:
+  The runner performs idempotent upserts into DynamoDB. Existing rows with the same
+  primary key are overwritten in place, which is safe for rerunning the same dataset.
+
+Full refresh:
+  Set SPARK_FULL_REFRESH=1 only when the target tables must be deleted and rebuilt.
 EOF
 }
 
@@ -72,6 +75,7 @@ fi
 SPARK_MASTER="${SPARK_MASTER:-local[*]}"
 SPARK_SHUFFLE_PARTITIONS="${SPARK_SHUFFLE_PARTITIONS:-16}"
 SPARK_LOG_LEVEL="${SPARK_LOG_LEVEL:-ERROR}"
+SPARK_FULL_REFRESH="${SPARK_FULL_REFRESH:-0}"
 SPARK_SUBMIT_BIN="${SPARK_SUBMIT_BIN:-}"
 
 if [[ -z "${SPARK_SUBMIT_BIN}" ]]; then
@@ -93,7 +97,16 @@ echo "  input: ${DATASET_DIR}"
 echo "  summary table: ${SUMMARY_TABLE}"
 echo "  events table: ${EVENTS_TABLE}"
 echo "  region: ${AWS_REGION}"
-echo "  warning: target DynamoDB tables will be cleared before they are rewritten"
+if [[ "${SPARK_FULL_REFRESH}" == "1" ]]; then
+    echo "  mode: full refresh (tables will be cleared before rewriting)"
+else
+    echo "  mode: idempotent upsert"
+fi
+
+SPARK_EXTRA_ARGS=()
+if [[ "${SPARK_FULL_REFRESH}" == "1" ]]; then
+    SPARK_EXTRA_ARGS+=(--full-refresh)
+fi
 
 "${SPARK_SUBMIT_BIN}" \
   --master "${SPARK_MASTER}" \
@@ -103,4 +116,5 @@ echo "  warning: target DynamoDB tables will be cleared before they are rewritte
   --events-table "${EVENTS_TABLE}" \
   --aws-region "${AWS_REGION}" \
   --shuffle-partitions "${SPARK_SHUFFLE_PARTITIONS}" \
-  --log-level "${SPARK_LOG_LEVEL}"
+  --log-level "${SPARK_LOG_LEVEL}" \
+  "${SPARK_EXTRA_ARGS[@]}"

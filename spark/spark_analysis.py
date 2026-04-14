@@ -25,6 +25,7 @@ Run on AWS (for example, Amazon EMR):
 
 import argparse
 import os
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import boto3
@@ -96,6 +97,14 @@ def build_parser():
     )
     parser.add_argument("--app-name", default="DriverBehaviorAnalysis")
     parser.add_argument("--log-level", default="ERROR")
+    parser.add_argument(
+        "--full-refresh",
+        action="store_true",
+        help=(
+            "Delete and rebuild the target DynamoDB tables before writing. "
+            "Leave unset for the default idempotent upsert mode."
+        ),
+    )
     return parser
 
 
@@ -159,9 +168,29 @@ def build_drivers_summary(df):
 
 def build_event_records(df):
     """Build one DynamoDB item per event record."""
-    # A monotonic tie-breaker keeps keys unique without the per-driver sort cost of row_number().
-    # The primary ordering remains chronological because the sort key still starts with `time`.
-    padded_sequence = F.lpad(F.monotonically_increasing_id().cast("string"), 20, "0")
+    identity_field_names = [
+        "driverID",
+        "carPlateNumber",
+        "siteName",
+        "direction",
+        "time",
+        "speed",
+        "isOverspeed",
+        "latitude",
+        "longitude",
+        "overspeedTime",
+        "isFatigueDriving",
+        "isNeutralSlide",
+        "neutralSlideTime",
+        "isRapidlySpeedup",
+        "isRapidlySlowdown",
+        "isHthrottleStop",
+        "isOilLeak",
+    ]
+    identity_columns = [F.coalesce(F.col(name).cast("string"), F.lit("")) for name in identity_field_names]
+    stable_suffix = F.sha2(F.concat_ws("||", *identity_columns), 256)
+    duplicate_window = Window.partitionBy(*identity_field_names).orderBy(*identity_field_names)
+    duplicate_ordinal = F.lpad(F.row_number().over(duplicate_window).cast("string"), 6, "0")
 
     return (
         df.select(
@@ -184,10 +213,10 @@ def build_event_records(df):
             "isOilLeak",
         )
         .withColumn("eventDate", F.substring("time", 1, 10))
-        .withColumn("eventKey", F.concat_ws("#", F.col("time"), padded_sequence))
+        .withColumn("eventKey", F.concat_ws("#", F.col("time"), stable_suffix, duplicate_ordinal))
         .withColumn(
             "eventTimeDriverKey",
-            F.concat_ws("#", F.col("time"), F.col("driverID"), padded_sequence),
+            F.concat_ws("#", F.col("time"), F.col("driverID"), stable_suffix, duplicate_ordinal),
         )
         .drop("siteName", "direction")
     )
@@ -256,6 +285,25 @@ def write_events_to_dynamodb(events_df, table_name, aws_region):
     events_df.rdd.foreachPartition(lambda rows: _write_events_partition(rows, table_name, aws_region))
 
 
+def prune_summary_rows(table_name, current_driver_ids, aws_region):
+    table = _dynamodb_table(table_name, aws_region)
+    current_driver_ids = set(current_driver_ids)
+
+    with table.batch_writer() as batch:
+        scan_kwargs = {"ProjectionExpression": "driverID"}
+        while True:
+            response = table.scan(**scan_kwargs)
+            for item in response.get("Items", []):
+                driver_id = item.get("driverID")
+                if driver_id and driver_id not in current_driver_ids:
+                    batch.delete_item(Key={"driverID": driver_id})
+
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            scan_kwargs["ExclusiveStartKey"] = last_key
+
+
 def validate_dynamodb_args(args):
     if args.summary_table and args.events_table:
         return
@@ -267,21 +315,40 @@ def write_dynamodb_outputs(args, df):
     validate_dynamodb_args(args)
 
     try:
+        analysis_generated_at = datetime.now(timezone.utc).isoformat()
+        analysis_run_id = analysis_generated_at
+
         print(f"Computing driver summary rows for table {args.summary_table} ...")
         drivers_summary_df = build_drivers_summary(df)
         drivers_summary_data = [row.asDict() for row in drivers_summary_df.collect()]
+        for item in drivers_summary_data:
+            item["analysis_run_id"] = analysis_run_id
+            item["analysis_generated_at"] = analysis_generated_at
         print(f"Computed {len(drivers_summary_data)} summary rows.")
-
-        print(f"Clearing summary table {args.summary_table} ...")
-        clear_dynamodb_table(args.summary_table, ["driverID"], args.aws_region)
+        if args.full_refresh:
+            print(f"Clearing summary table {args.summary_table} ...")
+            clear_dynamodb_table(args.summary_table, ["driverID"], args.aws_region)
+        else:
+            print(f"Upserting summary rows into {args.summary_table} ...")
         print(f"Writing summary rows to {args.summary_table} ...")
         write_summary_to_dynamodb(drivers_summary_data, args.summary_table, args.aws_region)
+        if not args.full_refresh:
+            prune_summary_rows(
+                args.summary_table,
+                [item["driverID"] for item in drivers_summary_data],
+                args.aws_region,
+            )
         print(f"Summary table refresh complete for {args.summary_table}.")
 
         print(f"Building event records for table {args.events_table} ...")
         event_records_df = build_event_records(df)
-        print(f"Clearing event table {args.events_table} ...")
-        clear_dynamodb_table(args.events_table, ["driverID", "eventKey"], args.aws_region)
+        if args.full_refresh:
+            print(f"Clearing event table {args.events_table} ...")
+            clear_dynamodb_table(args.events_table, ["driverID", "eventKey"], args.aws_region)
+        else:
+            print(
+                f"Upserting event records into {args.events_table} using deterministic event keys ..."
+            )
         print(f"Writing event records to {args.events_table} ...")
         write_events_to_dynamodb(event_records_df, args.events_table, args.aws_region)
         print(f"Event table refresh complete for {args.events_table}.")

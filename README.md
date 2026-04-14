@@ -66,6 +66,8 @@ The deployed data flow is:
 
 `dataset/detail-records/ -> spark/spark_analysis.py on EMR -> DynamoDB -> Flask app on EC2`
 
+The EMR job also requires a Python dependency bundle because the Spark script writes to DynamoDB through `boto3`. The upload helper builds and uploads that bundle automatically.
+
 ## Spark Output Model
 
 The production Spark job writes directly to two DynamoDB tables:
@@ -78,6 +80,8 @@ The production Spark job writes directly to two DynamoDB tables:
    - sort key: `eventKey`
    - GSI: `event-date-index`
    - contains per-event monitoring and behavior data used by `/api/speed/<driver_id>` and period-filtered summary requests
+
+By default, reruns use deterministic event keys and idempotent upserts. Reprocessing the same dataset rewrites matching items in place instead of deleting the tables first. Use `--full-refresh` only when the target tables must be rebuilt from scratch.
 
 ## Local Spark Validation
 
@@ -93,6 +97,8 @@ python spark/spark_analysis.py \
   --events-table project-harpy-eagle-driver-events \
   --aws-region ap-southeast-1
 ```
+
+To force a destructive rebuild of the target tables, add `--full-refresh`.
 
 ## Run the Web App
 

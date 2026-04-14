@@ -120,6 +120,8 @@ This creates:
 
 The helper uses `PAY_PER_REQUEST` billing to avoid capacity planning for this project workload.
 
+The current Spark job defaults to idempotent upserts. Rerunning the same dataset rewrites matching items in place by using deterministic `eventKey` values. Use `--full-refresh` only when the target tables must be cleared and rebuilt.
+
 ### 5. Upload the Spark script and dataset
 
 From the project root:
@@ -143,6 +145,8 @@ Manual equivalent:
 aws s3 cp spark/spark_analysis.py s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_analysis.py
 aws s3 sync dataset/detail-records/ s3://PROJECT_BUCKET/project-harpy-eagle/dataset/detail-records/
 ```
+
+The upload helper also builds and uploads `s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_pyfiles.zip`. That dependency bundle is required because the Spark job imports `boto3` when it writes to DynamoDB.
 
 ## Part 3: Run Spark on EMR
 
@@ -243,12 +247,24 @@ This submits a Spark step equivalent to:
 
 ```bash
 spark-submit --deploy-mode cluster \
+  --py-files s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_pyfiles.zip \
   s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_analysis.py \
   --input s3://PROJECT_BUCKET/project-harpy-eagle/dataset/detail-records/ \
   --summary-table project-harpy-eagle-driver-summary \
   --events-table project-harpy-eagle-driver-events \
   --aws-region ap-southeast-1 \
   --log-level ERROR
+```
+
+If a destructive rebuild is required:
+
+```bash
+export SPARK_FULL_REFRESH=1
+./deploy/emr/add_spark_step.sh \
+  j-XXXXXXXXXXXXX \
+  s3://PROJECT_BUCKET/project-harpy-eagle \
+  project-harpy-eagle-driver-summary \
+  project-harpy-eagle-driver-events
 ```
 
 ### 8. Verify the EMR step
@@ -331,8 +347,11 @@ aws dynamodb query \
 Successful verification means:
 
 - the summary table contains one item per driver
+- the summary items expose `analysis_generated_at`, which changes on each successful Spark run
 - the events table contains multiple event rows per driver
 - the Flask app can later return `200` from `/ready`
+
+Do not rely on the DynamoDB table overview `ItemCount` as a live progress signal during an active EMR run. Query the table directly instead.
 
 ## Part 4: Launch and Prepare the EC2 Web Server
 
