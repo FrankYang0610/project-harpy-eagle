@@ -25,6 +25,8 @@ Run on AWS (for example, Amazon EMR):
 
 import argparse
 import os
+import sys
+import traceback
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -250,6 +252,36 @@ def _dynamodb_table(table_name, aws_region):
     return resource.Table(table_name)
 
 
+def _format_aws_error(exc):
+    if isinstance(exc, ClientError):
+        error = exc.response.get("Error", {})
+        code = error.get("Code", "UnknownClientError")
+        message = error.get("Message", str(exc))
+        return f"{code}: {message}"
+    return str(exc)
+
+
+def validate_dynamodb_targets(args):
+    summary_table = _dynamodb_table(args.summary_table, args.aws_region)
+    events_table = _dynamodb_table(args.events_table, args.aws_region)
+
+    try:
+        print(f"Validating summary table {args.summary_table} ...")
+        summary_table.load()
+        print(f"Validating events table {args.events_table} ...")
+        events_table.load()
+
+        if args.full_refresh:
+            print("Validating scan access required for full refresh ...")
+            summary_table.scan(Limit=1, ProjectionExpression="driverID")
+            events_table.scan(Limit=1, ProjectionExpression="driverID, eventKey")
+    except (ClientError, BotoCoreError) as exc:
+        raise RuntimeError(
+            "DynamoDB preflight validation failed. "
+            f"Check table names, region, and EMR EC2 instance-profile permissions. {_format_aws_error(exc)}"
+        ) from exc
+
+
 def clear_dynamodb_table(table_name, key_fields, aws_region):
     table = _dynamodb_table(table_name, aws_region)
     projection = ", ".join(key_fields)
@@ -313,6 +345,7 @@ def validate_dynamodb_args(args):
 
 def write_dynamodb_outputs(args, df):
     validate_dynamodb_args(args)
+    validate_dynamodb_targets(args)
 
     try:
         analysis_generated_at = datetime.now(timezone.utc).isoformat()
@@ -378,4 +411,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        traceback.print_exc()
+        sys.stderr.flush()
+        raise

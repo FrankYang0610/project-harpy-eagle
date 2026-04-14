@@ -66,7 +66,7 @@ The deployed data flow is:
 
 `dataset/detail-records/ -> spark/spark_analysis.py on EMR -> DynamoDB -> Flask app on EC2`
 
-The EMR job also requires a Python dependency bundle because the Spark script writes to DynamoDB through `boto3`. The upload helper builds and uploads that bundle automatically.
+The EMR cluster must install `boto3` on all nodes through the bootstrap action script in [bootstrap/install-boto3.sh](/Users/jimyang/PycharmProjects/project-harpy-eagle/bootstrap/install-boto3.sh). The Spark step itself is submitted without any Python dependency archive.
 
 ## Spark Output Model
 
@@ -136,6 +136,7 @@ Detailed AWS deployment instructions are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Repository helpers for the production flow:
 
+- [bootstrap/install-boto3.sh](bootstrap/install-boto3.sh)
 - [scripts/create_dynamodb_tables.sh](scripts/create_dynamodb_tables.sh)
 - [scripts/upload_emr_assets_to_s3.sh](scripts/upload_emr_assets_to_s3.sh)
 - [deploy/emr/add_spark_step.sh](deploy/emr/add_spark_step.sh)
@@ -153,6 +154,10 @@ export AWS_REGION=ap-southeast-1
   project-harpy-eagle-driver-summary \
   project-harpy-eagle-driver-events
 ```
+
+Before submitting the EMR step, create a new EMR cluster with a bootstrap action that points to:
+
+`s3://PROJECT_BUCKET/project-harpy-eagle/bootstrap/install-boto3.sh`
 
 When the EMR cluster is created in the AWS console, the EMR EC2 instance profile must include DynamoDB permissions for the summary table, the events table, and the events date index. The Spark job writes to DynamoDB directly from the EMR nodes, so the service role alone is not sufficient.
 

@@ -16,7 +16,6 @@ Arguments:
 
 Environment variables:
   SPARK_SCRIPT_URI  Optional override for the Spark script path
-  SPARK_PYFILES_URI Optional override for the Spark dependency bundle path
   SPARK_INPUT_URI   Optional override for the dataset prefix
   SPARK_SUMMARY_TABLE  Optional override for the DynamoDB summary table
   SPARK_EVENTS_TABLE   Optional override for the DynamoDB events table
@@ -54,7 +53,6 @@ if ! command -v aws >/dev/null 2>&1; then
 fi
 
 SCRIPT_URI="${SPARK_SCRIPT_URI:-${S3_PREFIX%/}/code/spark_analysis.py}"
-PYFILES_URI="${SPARK_PYFILES_URI:-${S3_PREFIX%/}/code/spark_pyfiles.zip}"
 INPUT_URI="${SPARK_INPUT_URI:-${S3_PREFIX%/}/dataset/detail-records/}"
 SPARK_LOG_LEVEL="${SPARK_LOG_LEVEL:-ERROR}"
 SPARK_FULL_REFRESH="${SPARK_FULL_REFRESH:-0}"
@@ -69,8 +67,6 @@ SPARK_ARGS=(
   "spark-submit"
   "--deploy-mode"
   "cluster"
-  "--py-files"
-  "${PYFILES_URI}"
   "${SCRIPT_URI}"
   "--input"
   "${INPUT_URI}"

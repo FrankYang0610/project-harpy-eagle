@@ -143,10 +143,9 @@ Manual equivalent:
 
 ```bash
 aws s3 cp spark/spark_analysis.py s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_analysis.py
+aws s3 cp bootstrap/install-boto3.sh s3://PROJECT_BUCKET/project-harpy-eagle/bootstrap/install-boto3.sh
 aws s3 sync dataset/detail-records/ s3://PROJECT_BUCKET/project-harpy-eagle/dataset/detail-records/
 ```
-
-The upload helper also builds and uploads `s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_pyfiles.zip`. That dependency bundle is required because the Spark job imports `boto3` when it writes to DynamoDB.
 
 ## Part 3: Run Spark on EMR
 
@@ -174,6 +173,14 @@ In the IAM roles section of the EMR console:
   - DynamoDB access to the summary table, events table, and events date index
 
 Without the DynamoDB permissions on the EC2 instance profile, the submitted Spark step will fail when it tries to write the processed output.
+
+Add a bootstrap action during cluster creation:
+
+- Name: `Install boto3`
+- Script location: `s3://PROJECT_BUCKET/project-harpy-eagle/bootstrap/install-boto3.sh`
+- Arguments: leave blank
+
+This installs `boto3` on all EMR nodes before the Spark step runs. The production step helper assumes this bootstrap action is present and submits a plain `spark-submit` command without shipping the AWS SDK inside the step.
 
 The Spark job should be submitted after cluster creation as a separate EMR step.
 
@@ -247,7 +254,6 @@ This submits a Spark step equivalent to:
 
 ```bash
 spark-submit --deploy-mode cluster \
-  --py-files s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_pyfiles.zip \
   s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_analysis.py \
   --input s3://PROJECT_BUCKET/project-harpy-eagle/dataset/detail-records/ \
   --summary-table project-harpy-eagle-driver-summary \

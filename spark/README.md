@@ -105,7 +105,7 @@ To force a destructive rebuild on EMR, add `--full-refresh` to the Spark argumen
 
 The helper script [add_spark_step.sh](/Users/jimyang/PycharmProjects/project-harpy-eagle/deploy/emr/add_spark_step.sh) submits the equivalent command as an EMR step.
 
-The EMR helper also passes `--py-files s3://.../code/spark_pyfiles.zip`. That bundle is uploaded by [upload_emr_assets_to_s3.sh](/Users/jimyang/PycharmProjects/project-harpy-eagle/scripts/upload_emr_assets_to_s3.sh) and contains the AWS SDK dependencies required by the Spark job.
+The EMR cluster must install `boto3` on all nodes through the bootstrap action script in [bootstrap/install-boto3.sh](/Users/jimyang/PycharmProjects/project-harpy-eagle/bootstrap/install-boto3.sh). The step helper submits a plain `spark-submit` command without packaging the AWS SDK inside the job itself.
 
 When the cluster is created in the EMR console, the EMR EC2 instance profile must include permission to write to the summary table and events table in DynamoDB. The Spark job uses the AWS SDK directly on the cluster nodes, so those table permissions must be available to the instance profile used by the EMR EC2 instances.
 
