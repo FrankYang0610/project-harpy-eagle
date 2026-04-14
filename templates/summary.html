@@ -4,12 +4,22 @@
     <p class="subtitle">Aggregated statistics for all drivers over the recorded period</p>
   </div>
   <p id="summary-status" class="panel-status hidden" role="status" aria-live="polite"></p>
+  <section class="risk-ranking" aria-label="Driver risk ranking">
+    <div class="risk-ranking-header">
+      <h3>Driver Risk Ranking</h3>
+      <p>Normalized score based on overspeed, fatigue driving, neutral slide, rapid speed-up, and rapid slowdown</p>
+    </div>
+    <div id="risk-ranking-list" class="risk-ranking-list"></div>
+  </section>
   <div id="summary-table-wrap" class="table-wrap">
     <table id="summary-table">
       <thead>
         <tr>
+          <th>Risk Rank</th>
           <th>Driver ID</th>
           <th>Plate Number</th>
+          <th>Risk Score</th>
+          <th>Risk Level</th>
           <th>Overspeed Count</th>
           <th>Overspeed Time (s)</th>
           <th>Fatigue Count</th>

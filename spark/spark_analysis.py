@@ -22,6 +22,7 @@ import json
 from pathlib import Path
 
 from pyspark.sql import SparkSession
+from pyspark.sql import Window
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
     DoubleType,
@@ -84,7 +85,7 @@ def build_parser():
 
 def build_drivers_summary(df):
     """Aggregate per-driver behavior statistics (Function A)."""
-    return df.groupBy("driverID", "carPlateNumber").agg(
+    summary_df = df.groupBy("driverID", "carPlateNumber").agg(
         F.sum("isOverspeed").cast("int").alias("overspeed_count"),
         F.sum("overspeedTime").alias("total_overspeed_time"),
         F.sum("isFatigueDriving").cast("int").alias("fatigue_count"),
@@ -94,7 +95,47 @@ def build_drivers_summary(df):
         F.sum("isRapidlySlowdown").cast("int").alias("rapid_slowdown_count"),
         F.sum("isHthrottleStop").cast("int").alias("hthrottle_stop_count"),
         F.sum("isOilLeak").cast("int").alias("oil_leak_count"),
-    ).orderBy("driverID")
+    )
+
+    scored_df = summary_df.withColumn(
+        "risk_raw_score",
+        F.col("overspeed_count") * F.lit(0.35)
+        + F.col("fatigue_count") * F.lit(0.30)
+        + F.col("neutral_slide_count") * F.lit(0.15)
+        + F.col("rapid_speedup_count") * F.lit(0.10)
+        + F.col("rapid_slowdown_count") * F.lit(0.10),
+    )
+
+    all_drivers = Window.rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+    ranked_drivers = Window.orderBy(F.desc("risk_score"), F.asc("driverID"))
+
+    return (
+        scored_df
+        .withColumn("max_risk_raw_score", F.max("risk_raw_score").over(all_drivers))
+        .withColumn("min_risk_raw_score", F.min("risk_raw_score").over(all_drivers))
+        .withColumn(
+            "risk_score",
+            F.round(
+                F.when(
+                    F.col("max_risk_raw_score") > F.col("min_risk_raw_score"),
+                    (
+                        (F.col("risk_raw_score") - F.col("min_risk_raw_score"))
+                        / (F.col("max_risk_raw_score") - F.col("min_risk_raw_score"))
+                    ) * F.lit(100.0),
+                ).otherwise(F.lit(0.0)),
+                1,
+            ),
+        )
+        .withColumn(
+            "risk_level",
+            F.when(F.col("risk_score") >= 70, F.lit("High Risk"))
+            .when(F.col("risk_score") >= 40, F.lit("Medium Risk"))
+            .otherwise(F.lit("Low Risk")),
+        )
+        .withColumn("risk_rank", F.row_number().over(ranked_drivers))
+        .drop("max_risk_raw_score", "min_risk_raw_score")
+        .orderBy("risk_rank")
+    )
 
 
 def build_per_driver_speed_series(df):
