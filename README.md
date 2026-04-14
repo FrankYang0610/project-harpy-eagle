@@ -92,7 +92,7 @@ Health endpoints:
 
 ### Deployment
 
-Detailed AWS deployment instructions are in [DEPLOYMENT.md](/Users/jimyang/PycharmProjects/project-harpy-eagle/DEPLOYMENT.md).
+Detailed AWS deployment instructions are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Supported production architecture:
 
