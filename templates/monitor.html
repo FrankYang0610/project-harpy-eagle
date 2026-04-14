@@ -23,8 +23,38 @@
     ⚠ Warning: Overspeed detected!
   </div>
 
-  <div class="chart-container">
-    <canvas id="speed-chart"></canvas>
-  </div>
+  <div class="monitor-visual-grid">
+    <div class="chart-block">
+      <div class="visual-header">
+        <h3>Speed Trend</h3>
+        <div class="chart-legend" aria-label="Speed chart legend">
+          <span><i class="legend-line speed-line"></i>Speed</span>
+          <span><i class="legend-line limit-line"></i>Limit 120</span>
+        </div>
+      </div>
+      <div class="chart-container">
+        <div class="chart-y-axis" aria-hidden="true">
+          <span class="axis-title">km/h</span>
+          <span class="axis-tick">160</span>
+          <span class="axis-tick">120</span>
+          <span class="axis-tick">80</span>
+          <span class="axis-tick">40</span>
+          <span class="axis-tick">0</span>
+        </div>
+        <div id="speed-chart-scroll" class="chart-scroll" aria-label="Scrollable speed chart">
+          <div id="speed-chart-track">
+            <canvas id="speed-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
 
+    <div class="map-block" aria-label="Driver trajectory map">
+      <div class="visual-header">
+        <h3>Driving Trajectory</h3>
+        <p id="map-status">Start monitoring to draw the route on OpenStreetMap.</p>
+      </div>
+      <div id="trajectory-map"></div>
+    </div>
+  </div>
 </section>

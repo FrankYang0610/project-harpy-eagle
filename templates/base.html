@@ -6,8 +6,12 @@
   <title>Driver Behavior Analysis</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/summary.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor-base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor-chart.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor-map.css') }}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -39,6 +43,8 @@
 
   <script src="{{ url_for('static', filename='js/tabs.js') }}"></script>
   <script src="{{ url_for('static', filename='js/summary.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/monitor.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/monitor-chart.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/monitor-map.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/monitor-base.js') }}"></script>
 </body>
 </html>

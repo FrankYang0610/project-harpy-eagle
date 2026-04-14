@@ -1,4 +1,4 @@
-/* Function B — Speed monitor */
+/* Function B monitor controls */
 
 (function () {
   "use strict";
@@ -11,16 +11,13 @@
   var panelStatus = document.getElementById("monitor-panel-status");
   var refreshInfo = document.getElementById("next-refresh");
 
-  var chart = null;
   var intervalId = null;
+  var countdownId = null;
   var currentOffset = 0;
+  var nextRefreshAt = 0;
 
   var BATCH_SIZE = 50;
   var REFRESH_MS = 30000;  // see project instruction document
-
-  var chartLabels = [];
-  var chartSpeeds = [];
-  var chartOverspeed = [];
 
   function setPanelStatus(message, isError) {
     panelStatus.textContent = message;
@@ -29,7 +26,7 @@
   }
 
   function resetMonitorUi() {
-    clearInterval(intervalId);
+    clearTimeout(intervalId);
     intervalId = null;
     stopCountdown();
     driverSelect.disabled = false;
@@ -44,19 +41,12 @@
     setPanelStatus(err.message || "Unable to load speed data.", true);
   }
 
-  function clearChartData() {
-    chartLabels.length = 0;
-    chartSpeeds.length = 0;
-    chartOverspeed.length = 0;
+  function clearData() {
     alertBox.classList.add("hidden");
-
-    if (chart) {
-      chart.data.datasets[1].data = [];
-      chart.update();
-    }
+    window.MonitorChart.clear();
+    window.MonitorMap.clear();
   }
 
-  // driver dropdown list
   async function loadDrivers() {
     try {
       var resp = await fetch("/api/drivers");
@@ -79,62 +69,6 @@
     }
   }
 
-  loadDrivers();
-
-  driverSelect.addEventListener("change", function () {
-    btnStart.disabled = !driverSelect.value;
-  });
-
-  function initChart() {
-    var ctx = document.getElementById("speed-chart").getContext("2d");
-    chart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: chartLabels,
-        datasets: [
-          {
-            label: "Speed (km/h)",
-            data: chartSpeeds,
-            borderColor: "#3b7dd8",
-            backgroundColor: "rgba(59,125,216,0.08)",
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.3,
-            fill: true,
-          },
-          {
-            label: "Speed Limit (120 km/h)",
-            data: [],
-            borderColor: "rgba(220,60,60,0.6)",
-            borderWidth: 1.5,
-            borderDash: [6, 4],
-            pointRadius: 0,
-            fill: false,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: { duration: 400 },
-        interaction: { mode: "index", intersect: false },
-        scales: {
-          x: {
-            ticks: { maxTicksLimit: 12, font: { size: 11 } },
-          },
-          y: {
-            beginAtZero: true,
-            suggestedMax: 160,
-            title: { display: true, text: "Speed (km/h)", font: { size: 12 } },
-          },
-        },
-        plugins: {
-          legend: { labels: { font: { size: 12 } } },
-        },
-      },
-    });
-  }
-
   async function fetchBatch() {
     var driverId = driverSelect.value;
     if (!driverId) return;
@@ -152,34 +86,21 @@
     if (body.count === 0) {
       if (currentOffset > 0) {
         currentOffset = 0;
-        clearChartData();
+        clearData();
         return fetchBatch();
       }
 
-      clearChartData();
+      clearData();
       setPanelStatus("No speed data was generated for this driver yet.", false);
       return;
     }
 
-    var hasOverspeed = false;
-
-    body.records.forEach(function (r) {
-      chartLabels.push(r.time);
-      chartSpeeds.push(r.speed);
-      chartOverspeed.push(r.isOverspeed);
-      if (r.isOverspeed === 1) hasOverspeed = true;
+    var hasOverspeed = body.records.some(function (record) {
+      return record.isOverspeed === 1;
     });
 
-    var MAX_POINTS = 500;
-    if (chartLabels.length > MAX_POINTS) {
-      var trim = chartLabels.length - MAX_POINTS;
-      chartLabels.splice(0, trim);
-      chartSpeeds.splice(0, trim);
-      chartOverspeed.splice(0, trim);
-    }
-
-    chart.data.datasets[1].data = chartLabels.map(function () { return 120; });
-    chart.update();
+    window.MonitorChart.update(body.records, currentOffset);
+    window.MonitorMap.update(body.records);
 
     currentOffset += body.count;
 
@@ -192,25 +113,48 @@
     setPanelStatus("", false);
   }
 
-  // Countdown display
-  var countdownSec = 0;
-  var countdownId = null;
+  function updateCountdownDisplay() {
+    if (!nextRefreshAt) {
+      refreshInfo.textContent = "Next refresh: \u2014";
+      return;
+    }
+
+    var secondsLeft = Math.max(0, Math.ceil((nextRefreshAt - Date.now()) / 1000));
+    refreshInfo.textContent = "Next refresh: " + secondsLeft + "s";
+  }
 
   function startCountdown() {
-    countdownSec = REFRESH_MS / 1000;
-    refreshInfo.textContent = "Next refresh: " + countdownSec + "s";
+    clearInterval(countdownId);
+    updateCountdownDisplay();
     countdownId = setInterval(function () {
-      countdownSec--;
-      if (countdownSec <= 0) countdownSec = REFRESH_MS / 1000;
-      refreshInfo.textContent = "Next refresh: " + countdownSec + "s";
+      updateCountdownDisplay();
     }, 1000);
   }
 
   function stopCountdown() {
     clearInterval(countdownId);
     countdownId = null;
+    nextRefreshAt = 0;
     refreshInfo.textContent = "Next refresh: \u2014";
   }
+
+  function scheduleNextRefresh() {
+    clearTimeout(intervalId);
+    nextRefreshAt = Date.now() + REFRESH_MS;
+    startCountdown();
+    intervalId = setTimeout(function () {
+      updateCountdownDisplay();
+      fetchBatch()
+        .then(scheduleNextRefresh)
+        .catch(handleMonitoringError);
+    }, REFRESH_MS);
+  }
+
+  loadDrivers();
+
+  driverSelect.addEventListener("change", function () {
+    btnStart.disabled = !driverSelect.value;
+  });
 
   btnStart.addEventListener("click", async function () {
     if (!driverSelect.value) return;
@@ -223,16 +167,14 @@
 
     currentOffset = 0;
 
-    if (chart) chart.destroy();
-    initChart();
-    clearChartData();
+    window.MonitorChart.init();
+    window.MonitorChart.clear();
+    window.MonitorMap.init();
+    window.MonitorMap.clear();
 
     try {
       await fetchBatch();
-      intervalId = setInterval(function () {
-        fetchBatch().catch(handleMonitoringError);
-      }, REFRESH_MS);
-      startCountdown();
+      scheduleNextRefresh();
     } catch (err) {
       handleMonitoringError(err);
     }

@@ -100,7 +100,7 @@ def build_drivers_summary(df):
 def build_per_driver_speed_series(df):
     """Select columns needed for real-time speed monitoring (Function B)."""
     return (
-        df.select("driverID", "carPlateNumber", "time", "speed", "isOverspeed")
+        df.select("driverID", "carPlateNumber", "time", "speed", "isOverspeed", "latitude", "longitude")
         .orderBy("driverID", "time")
     )
 
