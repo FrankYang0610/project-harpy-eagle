@@ -111,6 +111,11 @@ Deployment flow:
 5. serve the Flask app with `Gunicorn`
 6. expose the site through a Cloudflare Tunnel created in the web console
 
+EMR execution options:
+
+- if the cluster is configured to terminate after the last step, a new cluster must be created for each rerun
+- if repeated testing is expected, configure the cluster to auto-terminate after an idle timeout so it can remain in `WAITING` between Spark runs
+
 Repository helpers for this flow:
 
 - [scripts/upload_emr_assets_to_s3.sh](scripts/upload_emr_assets_to_s3.sh)

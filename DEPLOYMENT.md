@@ -121,6 +121,32 @@ Notes:
 - no `--master` argument should be passed to `spark/spark_analysis.py` on EMR
 - the script already supports `s3://...` input and output paths
 
+Cluster lifetime options:
+
+- if the cluster is configured to terminate after the last step, each Spark rerun requires creating a new EMR cluster
+- if repeated testing is expected, configure the cluster to stay alive while idle and use an auto-termination policy so the cluster can return to `WAITING` after each step and terminate only after the idle timeout expires
+
+Recommended testing setup:
+
+- use a long-running cluster during active testing
+- attach an auto-termination policy with an idle timeout
+- manually or automatically let the cluster terminate after testing is finished
+
+AWS CLI example for an idle timeout of one hour:
+
+```bash
+aws emr put-auto-termination-policy \
+  --cluster-id <EMR_CLUSTER_ID> \
+  --auto-termination-policy IdleTimeout=3600 \
+  --region ap-southeast-1
+```
+
+With this configuration:
+
+- completed Spark steps leave the cluster in `WAITING`
+- additional Spark steps can be submitted while the cluster remains idle but alive
+- if no further work is submitted before the timeout expires, EMR terminates the cluster automatically
+
 ### 4A. Reference EMR Configuration Used in the Console
 
 The EMR cluster used for this project was configured in the AWS web console with the following settings:
