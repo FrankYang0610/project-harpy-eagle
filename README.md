@@ -96,20 +96,24 @@ Detailed AWS deployment instructions are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Supported production architecture:
 
-- one `EC2` instance
-- `PySpark` running on that same EC2 instance
-- `Gunicorn` running on that same EC2 instance
-- `Cloudflare Tunnel` exposing the local Gunicorn service, managed from the Cloudflare web console
+- `S3` stores the dataset, Spark script, generated results, and logs
+- `EMR` runs the Spark analysis job
+- `EC2` hosts the Flask app with `Gunicorn`
+- `Cloudflare Tunnel` exposes the EC2 web service, managed from the Cloudflare web console
 
 Deployment flow:
 
-1. launch one EC2 instance
-2. clone the repo onto that instance
-3. upload the dataset separately into `dataset/detail-records/`
-4. run `spark/spark_analysis.py --master local[*]`
+1. upload `spark/spark_analysis.py` and the raw dataset to `S3`
+2. run the Spark analysis on `EMR`
+3. write the generated JSON files to the S3 `results/` prefix
+4. sync the S3 `results/` prefix onto the EC2 host
 5. serve the Flask app with `Gunicorn`
 6. expose the site through a Cloudflare Tunnel created in the web console
 
-If the Spark step needs more memory, resize that same EC2 instance temporarily and then scale it back down after `results/` has been generated.
+Repository helpers for this flow:
+
+- [scripts/upload_emr_assets_to_s3.sh](scripts/upload_emr_assets_to_s3.sh)
+- [deploy/emr/add_spark_step.sh](deploy/emr/add_spark_step.sh)
+- [scripts/sync_results_from_s3.sh](scripts/sync_results_from_s3.sh)
 
 If the generated files under `results/` are missing, the dashboard will show a setup notice instead of failing silently.

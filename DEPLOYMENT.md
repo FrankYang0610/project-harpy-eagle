@@ -1,47 +1,157 @@
 # Deployment Guide
 
-This guide documents one deployment option only:
+This guide documents one production architecture only:
 
-- one `EC2` instance
-- `PySpark` running on that same instance
-- `Flask + Gunicorn` running on that same instance
-- `Cloudflare Tunnel` exposing the service, managed from the Cloudflare web console
+- `S3` stores the Spark script, raw dataset, generated JSON results, and EMR logs
+- `EMR` runs the Spark analysis job
+- `EC2` hosts the Flask application with `Gunicorn`
+- `Cloudflare Tunnel` exposes the EC2 web service
 
-This is the lowest-cost path that still satisfies the project requirements:
+This architecture cleanly separates batch analytics from the web tier:
 
-- the system is deployed on `AWS`
-- the analysis is performed with `Spark`
+1. raw files are uploaded to `S3`
+2. `EMR` runs `spark/spark_analysis.py`
+3. JSON results are written back to `S3`
+4. the EC2 web server syncs the `results/` prefix locally
+5. `Gunicorn` serves the dashboard from local JSON files
 
 ## Final Architecture
 
 Use exactly this setup:
 
-1. launch one Ubuntu 24.04 EC2 instance
-2. install Python, Java 17, and `cloudflared`
-3. upload the repo to the instance
-4. upload the dataset with SFTP into `dataset/detail-records/`
-5. install the Python dependencies
-6. run the Spark analysis locally with:
-   ```bash
-   python spark/spark_analysis.py --master local[*]
-   ```
-7. verify `results/` was generated
-8. run the website with `Gunicorn`
-9. expose the local Gunicorn service through `Cloudflare Tunnel`
+1. create one S3 bucket or one project prefix in an existing bucket
+2. upload the Spark script and dataset to `S3`
+3. create an EMR cluster with `Spark`
+4. submit the Spark analysis as an EMR step
+5. launch one Ubuntu EC2 instance for the website
+6. sync the S3 `results/` prefix onto the EC2 instance
+7. run the Flask app with `Gunicorn`
+8. expose the EC2 service with `Cloudflare Tunnel`
 
-No second AWS instance is required in this guide.
+The EC2 host does not run Spark in this architecture.
 
-## Part 1: Launch and Prepare the EC2 Instance
+## Part 1: Prepare S3
 
-### 1. Launch the instance
+### 1. Create the S3 layout
+
+Create a bucket or a base prefix such as:
+
+```text
+s3://PROJECT_BUCKET/project-harpy-eagle/
+├── code/
+├── dataset/detail-records/
+├── results/
+└── logs/
+```
+
+Recommended naming:
+
+- Spark script: `s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_analysis.py`
+- raw data: `s3://PROJECT_BUCKET/project-harpy-eagle/dataset/detail-records/`
+- generated results: `s3://PROJECT_BUCKET/project-harpy-eagle/results/`
+- EMR logs: `s3://PROJECT_BUCKET/project-harpy-eagle/logs/`
+
+### 2. Prepare AWS permissions
+
+Two AWS permission paths are required:
+
+- the local machine or CI environment that uploads assets and submits EMR steps needs AWS CLI credentials
+- the EC2 web server needs read access to the S3 `results/` prefix
+
+Recommended IAM configuration:
+
+- an EC2 instance role with `s3:GetObject` and `s3:ListBucket` for the project bucket
+- the default EMR roles, or custom EMR roles, with access to:
+  - read `code/`
+  - read `dataset/detail-records/`
+  - write `results/`
+  - write `logs/`
+
+## Part 2: Upload the Spark Assets to S3
+
+### 3. Upload the script and dataset
+
+From the project root on the local machine:
+
+```bash
+./scripts/upload_emr_assets_to_s3.sh s3://PROJECT_BUCKET/project-harpy-eagle
+```
+
+This uploads:
+
+- [spark/spark_analysis.py](/Users/jimyang/PycharmProjects/project-harpy-eagle/spark/spark_analysis.py) to `code/`
+- `dataset/detail-records/` to `dataset/detail-records/`
+
+If the dataset lives outside the default local path, pass it explicitly:
+
+```bash
+./scripts/upload_emr_assets_to_s3.sh s3://PROJECT_BUCKET/project-harpy-eagle /path/to/detail-records
+```
+
+Manual equivalent:
+
+```bash
+aws s3 cp spark/spark_analysis.py s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_analysis.py
+aws s3 sync dataset/detail-records/ s3://PROJECT_BUCKET/project-harpy-eagle/dataset/detail-records/
+```
+
+## Part 3: Run Spark on EMR
+
+### 4. Create the EMR cluster
+
+Create an EMR cluster with these minimum characteristics:
+
+- release line: current EMR 7.x release
+- applications: `Spark`
+- log URI: `s3://PROJECT_BUCKET/project-harpy-eagle/logs/`
+- instance layout: at least one primary node and one core node
+
+Notes:
+
+- no `--master` argument should be passed to `spark/spark_analysis.py` on EMR
+- the script already supports `s3://...` input and output paths
+
+### 5. Submit the Spark step
+
+Use the helper script:
+
+```bash
+./deploy/emr/add_spark_step.sh j-XXXXXXXXXXXXX s3://PROJECT_BUCKET/project-harpy-eagle
+```
+
+This submits a Spark step equivalent to:
+
+```bash
+spark-submit --deploy-mode cluster s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_analysis.py \
+  --input s3://PROJECT_BUCKET/project-harpy-eagle/dataset/detail-records/ \
+  --output s3://PROJECT_BUCKET/project-harpy-eagle/results/
+```
+
+### 6. Verify EMR output
+
+After the step completes, confirm these objects exist in S3:
+
+```text
+s3://PROJECT_BUCKET/project-harpy-eagle/results/drivers_summary.json
+s3://PROJECT_BUCKET/project-harpy-eagle/results/per_driver_speed_data/*.json
+```
+
+Example:
+
+```bash
+aws s3 ls s3://PROJECT_BUCKET/project-harpy-eagle/results/
+aws s3 ls s3://PROJECT_BUCKET/project-harpy-eagle/results/per_driver_speed_data/ | head
+```
+
+## Part 4: Launch and Prepare the EC2 Web Server
+
+### 7. Launch the EC2 instance
 
 Use Ubuntu `24.04`.
 
 Recommended instance size:
 
-- `t3.medium`
-
-If the instance is too small during the Spark step, resize that same instance temporarily and then resize it back later.
+- `t3.small` or `t3.medium`
 
 Security group:
 
@@ -49,32 +159,24 @@ Security group:
 
 Because this guide uses Cloudflare Tunnel, `80/tcp` and `443/tcp` do not need to be exposed publicly.
 
-### 2. Connect to the instance
+Attach the EC2 IAM role that can read the S3 `results/` prefix.
+
+### 8. Connect to the instance
 
 ```bash
 ssh -i /path/to/ec2-key.pem ubuntu@EC2_PUBLIC_IP
 ```
 
-### 3. Install system packages
-
-Install:
+### 9. Install system packages
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-venv python3-pip openjdk-17-jre-headless unzip curl
+sudo apt install -y python3 python3-venv python3-pip unzip curl awscli
 ```
 
-Verify Java:
+The EC2 web host does not need Java or PySpark in this architecture.
 
-```bash
-java -version
-```
-
-## Part 2: Upload the Project and Dataset
-
-### 4. Copy the repository to the instance
-
-Clone from GitHub:
+### 10. Copy the repository to the instance
 
 ```bash
 cd /opt
@@ -83,7 +185,7 @@ sudo chown -R ubuntu:www-data /opt/project-harpy-eagle
 cd /opt/project-harpy-eagle
 ```
 
-### 5. Create the Python environment
+### 11. Create the Python environment
 
 ```bash
 cd /opt/project-harpy-eagle
@@ -91,88 +193,19 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install -r requirements-spark.txt
 ```
 
-Notes:
+The production web server only needs [requirements.txt](/Users/jimyang/PycharmProjects/project-harpy-eagle/requirements.txt).
 
-- `requirements.txt` is for the website runtime
-- `requirements-spark.txt` is for the Spark analysis step
+## Part 5: Sync Results from S3 onto EC2
 
-### 6. Upload the dataset
-
-Your Spark script expects:
-
-```text
-dataset/detail-records/
-```
-
-Place the raw files under:
-
-```text
-/opt/project-harpy-eagle/dataset/detail-records/
-```
-
-Example target file:
-
-```text
-/opt/project-harpy-eagle/dataset/detail-records/detail_record_2017_01_02_08_00_00
-```
-
-## Part 3: Run Spark on the EC2 Instance
-
-### 7. Run the Spark analysis
-
-From the project root:
-
-```bash
-cd /opt/project-harpy-eagle
-source .venv/bin/activate
-python spark/spark_analysis.py --master local[*]
-```
-
-This should generate:
-
-```text
-results/drivers_summary.json
-results/per_driver_speed_data/*.json
-```
-
-### 8. Verify the Spark output
-
-```bash
-ls /opt/project-harpy-eagle/results
-ls /opt/project-harpy-eagle/results/per_driver_speed_data | head
-```
-
-Optional quick check:
-
-```bash
-python - <<'PY'
-import json
-from pathlib import Path
-summary = json.loads(Path('/opt/project-harpy-eagle/results/drivers_summary.json').read_text())
-print('drivers:', len(summary))
-print('keys:', sorted(summary[0].keys()))
-PY
-```
-
-## Part 4: Configure and Verify the Website
-
-### 9. Prepare the environment file
-
-Copy the env template:
+### 12. Prepare the web app environment file
 
 ```bash
 cd /opt/project-harpy-eagle
 sudo cp .env.example /etc/project-harpy-eagle.env
 sudo chown root:root /etc/project-harpy-eagle.env
 sudo chmod 644 /etc/project-harpy-eagle.env
-```
-
-Edit it:
-
-```bash
 sudo nano /etc/project-harpy-eagle.env
 ```
 
@@ -190,11 +223,29 @@ GUNICORN_THREADS=4
 GUNICORN_TIMEOUT=120
 ```
 
-The key setting is:
+### 13. Run the first S3 sync
 
-- `RESULTS_DIR=/opt/project-harpy-eagle/results`
+```bash
+cd /opt/project-harpy-eagle
+./scripts/sync_results_from_s3.sh s3://PROJECT_BUCKET/project-harpy-eagle/results/
+```
 
-### 10. Smoke-test the Flask app
+Equivalent AWS CLI command:
+
+```bash
+aws s3 sync s3://PROJECT_BUCKET/project-harpy-eagle/results/ /opt/project-harpy-eagle/results/ --delete
+```
+
+### 14. Verify the local results directory
+
+```bash
+ls /opt/project-harpy-eagle/results
+ls /opt/project-harpy-eagle/results/per_driver_speed_data | head
+```
+
+## Part 6: Run and Validate the Website
+
+### 15. Smoke-test the Flask app
 
 ```bash
 cd /opt/project-harpy-eagle
@@ -215,11 +266,11 @@ curl http://127.0.0.1:5000/ready
 Expected:
 
 - `/health` returns `200`
-- `/ready` returns `200` if the result files are present
+- `/ready` returns `200` when the synced result files are present
 
 Stop the dev server with `Ctrl+C`.
 
-### 11. Smoke-test Gunicorn
+### 16. Smoke-test Gunicorn
 
 ```bash
 cd /opt/project-harpy-eagle
@@ -246,55 +297,68 @@ Expected:
 
 Stop Gunicorn with `Ctrl+C`.
 
-## Part 5: Run the Website as a Service
-
-### 12. Install the systemd service
-
-Copy the unit file:
+### 17. Install the systemd web service
 
 ```bash
 sudo cp deploy/systemd/project-harpy-eagle.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable project-harpy-eagle
+sudo systemctl start project-harpy-eagle
 ```
 
 If the Linux username is not `ubuntu`, edit:
 
 [project-harpy-eagle.service](/Users/jimyang/PycharmProjects/project-harpy-eagle/deploy/systemd/project-harpy-eagle.service)
 
-Then enable and start:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable project-harpy-eagle
-sudo systemctl start project-harpy-eagle
-```
-
-Check logs:
+Check status:
 
 ```bash
 sudo systemctl status project-harpy-eagle
 sudo journalctl -u project-harpy-eagle -n 100 --no-pager
 ```
 
-Now test locally:
+## Part 7: Optional Automatic S3 Result Refresh
+
+### 18. Prepare the sync environment file
 
 ```bash
-curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8000/
+sudo cp deploy/systemd/project-harpy-eagle-sync.env.example /etc/project-harpy-eagle-sync.env
+sudo chown root:root /etc/project-harpy-eagle-sync.env
+sudo chmod 644 /etc/project-harpy-eagle-sync.env
+sudo nano /etc/project-harpy-eagle-sync.env
 ```
 
-## Part 6: Expose the Site with Cloudflare Tunnel
+Example contents:
 
-### 14. Prerequisites
+```bash
+S3_RESULTS_URI=s3://PROJECT_BUCKET/project-harpy-eagle/results/
+LOCAL_RESULTS_DIR=/opt/project-harpy-eagle/results
+AWS_REGION=ap-southeast-1
+```
 
-Before starting:
+### 19. Install the sync service and timer
 
-- add the domain to Cloudflare
-- move the domain nameservers to Cloudflare
-- choose the public hostname, for example `harpy.example.com`
+```bash
+sudo cp deploy/systemd/project-harpy-eagle-sync-results.service /etc/systemd/system/
+sudo cp deploy/systemd/project-harpy-eagle-sync-results.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable project-harpy-eagle-sync-results.timer
+sudo systemctl start project-harpy-eagle-sync-results.timer
+```
 
-### 15. Install `cloudflared`
+Manual test:
 
-Cloudflare’s current Debian/Ubuntu instructions use their apt repository.
+```bash
+sudo systemctl start project-harpy-eagle-sync-results.service
+sudo systemctl status project-harpy-eagle-sync-results.service
+sudo systemctl status project-harpy-eagle-sync-results.timer
+```
+
+The timer refreshes local results every five minutes.
+
+## Part 8: Expose the Site with Cloudflare Tunnel
+
+### 20. Install `cloudflared`
 
 ```bash
 sudo mkdir -p --mode=0755 /usr/share/keyrings
@@ -304,7 +368,7 @@ sudo apt-get update
 sudo apt-get install -y cloudflared
 ```
 
-### 16. Create the tunnel in the Cloudflare dashboard
+### 21. Create the tunnel in the Cloudflare dashboard
 
 In the Cloudflare Zero Trust web console:
 
@@ -314,21 +378,15 @@ In the Cloudflare Zero Trust web console:
 4. name it `project-harpy-eagle`
 5. keep the setup page open so the generated tunnel token can be copied
 
-This guide intentionally uses the web console flow only. No `cloudflared` config file is needed in the repository.
-
-### 17. Configure the public hostname in the web console
+### 22. Configure the public hostname
 
 Still in the Cloudflare dashboard, add a public hostname for the tunnel:
 
-- hostname: the chosen public name, for example `harpy.example.com`
+- hostname: the chosen public hostname, for example `harpy.example.com`
 - service type: `HTTP`
 - URL: `http://localhost:8000`
 
-The local origin must stay `http://localhost:8000` because Gunicorn is the web process listening on loopback.
-
-### 18. Install the tunnel as a service
-
-On the EC2 instance, run the install command from the Cloudflare dashboard and paste the tunnel token:
+### 23. Install the tunnel as a service
 
 ```bash
 sudo cloudflared service install YOUR_TUNNEL_TOKEN
@@ -337,11 +395,7 @@ sudo systemctl start cloudflared
 sudo systemctl status cloudflared
 ```
 
-If the service was already started during installation, `systemctl start` is harmless.
-
-### 19. Verify the public hostname
-
-After the service starts:
+### 24. Verify the public hostname
 
 ```bash
 curl http://127.0.0.1:8000/health
@@ -353,43 +407,42 @@ Then open:
 https://PUBLIC_HOSTNAME
 ```
 
-If the tunnel is configured correctly, Cloudflare should proxy the request to local Gunicorn and the website should load.
+## Part 9: Refresh Workflow
 
-## Part 7: Refreshing the Results Later
+When the dataset changes:
 
-Whenever the dataset changes:
+1. upload the new dataset files to S3
+2. submit the EMR Spark step again
+3. wait for the EMR step to finish
+4. let the EC2 sync timer refresh the local results, or run the sync script manually
 
-1. upload new raw files to `dataset/detail-records/`
-2. rerun:
-   ```bash
-   python spark/spark_analysis.py --master local[*]
-   ```
-3. the website will read the updated JSON files from `results/`
-
-Because the website reads the JSON files on demand, restarting the web service is usually unnecessary after refreshing `results/`.
+If the Spark script changes, upload [spark/spark_analysis.py](/Users/jimyang/PycharmProjects/project-harpy-eagle/spark/spark_analysis.py) to the S3 `code/` prefix again before submitting the next EMR step.
 
 ## Troubleshooting
 
-### Spark fails on EC2
+### EMR step fails
 
-- verify Java 17 is installed
-- verify `python -m pip show pyspark` works inside `.venv`
-- verify the raw files exist under `dataset/detail-records/`
-- if memory is too low, resize the same EC2 instance temporarily
+- verify the EMR cluster includes the `Spark` application
+- verify the EMR roles can read `code/` and `dataset/`
+- verify the EMR roles can write `results/` and `logs/`
+- verify the dataset exists under `s3://PROJECT_BUCKET/project-harpy-eagle/dataset/detail-records/`
 
-### The website shows setup notices
+### S3 results are missing on EC2
 
-- verify `RESULTS_DIR` points to `/opt/project-harpy-eagle/results`
-- verify `drivers_summary.json` exists
-- verify `per_driver_speed_data/*.json` exists
-- call `curl http://127.0.0.1:8000/ready`
+- verify the EC2 instance role can read the S3 bucket
+- run [scripts/sync_results_from_s3.sh](/Users/jimyang/PycharmProjects/project-harpy-eagle/scripts/sync_results_from_s3.sh) manually
+- inspect `sudo journalctl -u project-harpy-eagle-sync-results.service -n 100 --no-pager`
+
+### `/ready` returns `503`
+
+- verify `/opt/project-harpy-eagle/results/drivers_summary.json` exists
+- verify `/opt/project-harpy-eagle/results/per_driver_speed_data/*.json` exists
+- confirm `RESULTS_DIR=/opt/project-harpy-eagle/results`
 
 ### Cloudflare Tunnel does not connect
 
-- verify the hostname is in a zone managed by Cloudflare
 - verify the public hostname is attached to the correct tunnel in the Cloudflare dashboard
-- verify the dashboard origin URL is `http://localhost:8000`
-- verify the token used with `cloudflared service install` belongs to that tunnel
+- verify the tunnel origin URL is `http://localhost:8000`
 - verify `systemctl status cloudflared`
 - inspect `sudo journalctl -u cloudflared -n 100 --no-pager`
 
@@ -397,12 +450,12 @@ Because the website reads the JSON files on demand, restarting the web service i
 
 For the report, capture screenshots of:
 
-1. the EC2 instance details
-2. the Spark analysis command running on EC2
-3. the generated `results/` directory
-4. the website homepage
-5. the summary panel
-6. the speed monitor panel
-7. `/health`
-8. `systemctl status project-harpy-eagle`
+1. the S3 bucket layout
+2. the EMR cluster details
+3. the EMR step completion status
+4. the S3 `results/` prefix
+5. the EC2 instance details
+6. `systemctl status project-harpy-eagle`
+7. `systemctl status project-harpy-eagle-sync-results.timer`
+8. the website homepage
 9. the Cloudflare tunnel page in the web console or `systemctl status cloudflared`

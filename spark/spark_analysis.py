@@ -11,7 +11,7 @@ Run locally (from root dir):
     pip install -r requirements-spark.txt
     python spark/spark_analysis.py --master local[*]
 
-Run on AWS (for example, EMR Serverless):
+Run on AWS (for example, Amazon EMR):
     spark-submit spark/spark_analysis.py \
         --input s3://bucket/project-harpy-eagle/dataset/detail-records/ \
         --output s3://bucket/project-harpy-eagle/results/

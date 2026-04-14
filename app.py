@@ -11,7 +11,7 @@ SPEED_DATA_DIR = "per_driver_speed_data"
 DEFAULT_SPEED_BATCH_SIZE = 50
 MAX_SPEED_BATCH_SIZE = 500
 MISSING_RESULTS_MESSAGE = (
-    "Generated results are missing. Run `python spark/spark_analysis.py` before opening the dashboard."
+    "Generated results are missing. Run the Spark analysis and populate `RESULTS_DIR` before opening the dashboard."
 )
 
 
@@ -75,7 +75,7 @@ def _summary_status():
     if not summary_path.is_file():
         return {
             "ready": False,
-            "message": "The summary JSON is missing. Re-run `python spark/spark_analysis.py` to regenerate the analysis output.",
+            "message": "The summary JSON is missing. Re-run the Spark analysis and refresh `RESULTS_DIR` to regenerate the dashboard data.",
         }
 
     return {"ready": True, "message": ""}
@@ -94,14 +94,14 @@ def _speed_status():
     if not speed_dir.is_dir():
         return {
             "ready": False,
-            "message": "Per-driver speed data is missing. Re-run `python spark/spark_analysis.py` to regenerate the analysis output.",
+            "message": "Per-driver speed data is missing. Re-run the Spark analysis and refresh `RESULTS_DIR` to regenerate the dashboard data.",
         }
 
     driver_files = [path.name for path in speed_dir.iterdir() if path.suffix == ".json"]
     if not driver_files:
         return {
             "ready": False,
-            "message": "No per-driver speed files were found. Re-run `python spark/spark_analysis.py` to populate the dashboard data.",
+            "message": "No per-driver speed files were found. Re-run the Spark analysis and refresh `RESULTS_DIR` to populate the dashboard data.",
         }
 
     return {"ready": True, "message": ""}
@@ -165,7 +165,7 @@ def register_routes(app):
             return jsonify(_load_json(path))
         except (FileNotFoundError, json.JSONDecodeError):
             return _json_error(
-                "The summary data could not be read. Re-run `python spark/spark_analysis.py` to regenerate the results."
+                "The summary data could not be read. Re-run the Spark analysis and refresh `RESULTS_DIR` to regenerate the results."
             )
 
     @app.get("/api/drivers")
@@ -199,7 +199,7 @@ def register_routes(app):
             data = _load_json(path)
         except json.JSONDecodeError:
             return _json_error(
-                "The selected driver's speed data could not be read. Re-run `python spark/spark_analysis.py` to regenerate the results."
+                "The selected driver's speed data could not be read. Re-run the Spark analysis and refresh `RESULTS_DIR` to regenerate the results."
             )
 
         offset, limit = _get_batch_window()

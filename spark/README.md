@@ -4,9 +4,10 @@
 
 The supported project deployment path is:
 
-- run the Spark job on the same EC2 instance that hosts the website
-- read raw files from `dataset/detail-records/`
-- write JSON output into `results/`
+- upload the raw files to `S3`
+- run the Spark job on `EMR`
+- write JSON output back to the S3 `results/` prefix
+- sync the S3 `results/` prefix onto the EC2 web server
 
 
 ### Prerequisites
@@ -39,6 +40,8 @@ export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
 python spark/spark_analysis.py --master local[*]
 ```
 
+This local mode is primarily for development and validation. Production deployment uses EMR.
+
 ### Output
 
 ```
@@ -64,15 +67,18 @@ Example with custom local paths:
 python spark/spark_analysis.py --master local[*] --input /path/to/data/ --output /path/to/output/
 ```
 
-### Run on AWS EC2
+### Run on Amazon EMR
 
-Run the Spark job directly on the same EC2 instance that hosts the website.
+On EMR, do not pass `--master`.
 
 Example:
 
 ```bash
-source .venv/bin/activate
-python spark/spark_analysis.py --master local[*]
+spark-submit --deploy-mode cluster s3://PROJECT_BUCKET/project-harpy-eagle/code/spark_analysis.py \
+  --input s3://PROJECT_BUCKET/project-harpy-eagle/dataset/detail-records/ \
+  --output s3://PROJECT_BUCKET/project-harpy-eagle/results/
 ```
 
-After the analysis finishes and the JSON files are present under `results/`, start the Flask app from the project root with `gunicorn`.
+The helper script [add_spark_step.sh](/Users/jimyang/PycharmProjects/project-harpy-eagle/deploy/emr/add_spark_step.sh) submits this command as an EMR step.
+
+After the analysis finishes, sync the S3 `results/` prefix onto the EC2 web server with [sync_results_from_s3.sh](/Users/jimyang/PycharmProjects/project-harpy-eagle/scripts/sync_results_from_s3.sh) before starting or refreshing the Flask app.
