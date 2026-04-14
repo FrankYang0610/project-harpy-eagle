@@ -1,0 +1,105 @@
+/* All drivers speed monitor */
+
+#panel-all-monitor .all-monitor-subtitle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+
+#all-monitor-next-refresh {
+  color: #111;
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.all-monitor-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: #555;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.all-monitor-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.all-monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.all-monitor-tile {
+  min-width: 0;
+  border: 1px solid #b8c2d0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fcfcfe 0%, #f2f5fa 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.all-monitor-tile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 40px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid #d6dce6;
+}
+
+.all-monitor-tile-header h3 {
+  min-width: 0;
+  color: #222;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.all-monitor-latest {
+  color: #555;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.all-monitor-chart-wrap {
+  height: 170px;
+  padding: 8px 10px 10px;
+}
+
+.all-monitor-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 768px) {
+  #panel-all-monitor .all-monitor-subtitle-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  #all-monitor-next-refresh {
+    font-size: 16px;
+  }
+
+  .all-monitor-legend {
+    justify-content: flex-start;
+  }
+
+  .all-monitor-grid {
+    grid-template-columns: 1fr;
+  }
+}

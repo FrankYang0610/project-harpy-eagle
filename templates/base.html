@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor-base.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor-chart.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor-map.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/all-monitor.css') }}">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -24,6 +25,7 @@
   <nav class="tab-bar">
     <button class="tab active" data-tab="summary">Behavior Summary</button>
     <button class="tab" data-tab="monitor">Speed Monitor</button>
+    <button class="tab" data-tab="all-monitor">All Drivers Monitor</button>
   </nav>
 
   <main class="content">
@@ -35,6 +37,7 @@
 
     {% include "summary.html" %}
     {% include "monitor.html" %}
+    {% include "all-monitor.html" %}
   </main>
 
   <footer class="footer">
@@ -46,5 +49,6 @@
   <script src="{{ url_for('static', filename='js/monitor-chart.js') }}"></script>
   <script src="{{ url_for('static', filename='js/monitor-map.js') }}"></script>
   <script src="{{ url_for('static', filename='js/monitor-base.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/all-monitor.js') }}"></script>
 </body>
 </html>

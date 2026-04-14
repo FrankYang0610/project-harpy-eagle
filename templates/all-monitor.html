@@ -1,0 +1,18 @@
+<section id="panel-all-monitor" class="panel">
+  <div class="panel-header">
+    <h2>All Drivers Monitor</h2>
+    <div class="all-monitor-subtitle-row">
+      <p class="subtitle">Speed curves for every driver, refreshed every 30 seconds</p>
+      <span id="all-monitor-next-refresh">Next refresh: &mdash;</span>
+    </div>
+  </div>
+
+  <p id="all-monitor-status" class="panel-status hidden" role="status" aria-live="polite"></p>
+
+  <div class="all-monitor-legend" aria-label="All drivers monitor legend">
+    <span><i class="legend-line speed-line"></i>Speed</span>
+    <span><i class="legend-line limit-line"></i>Limit 120</span>
+  </div>
+
+  <div id="all-monitor-grid" class="all-monitor-grid" aria-label="All driver speed curves"></div>
+</section>
