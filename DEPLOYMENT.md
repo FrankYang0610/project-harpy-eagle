@@ -313,10 +313,46 @@ ssh -i /path/to/ec2-key.pem ubuntu@EC2_PUBLIC_IP
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-venv python3-pip unzip curl awscli
+sudo apt install -y python3 python3-venv python3-pip unzip curl
 ```
 
 The EC2 web host does not need Java or PySpark in this architecture.
+
+### 9A. Install AWS CLI v2 on Ubuntu
+
+AWS CLI v2 is the recommended installation path on the EC2 host.
+
+Check the machine architecture first:
+
+```bash
+uname -m
+```
+
+If the output is `x86_64`, install AWS CLI v2 with:
+
+```bash
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+```
+
+If the output is `aarch64`, install the ARM build:
+
+```bash
+curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+```
+
+After installation, verify that the EC2 IAM role is available to the instance:
+
+```bash
+aws sts get-caller-identity
+```
+
+If the EC2 instance role was attached recently, the credentials may take a short time to appear. A reboot is usually not required.
 
 ### 10. Copy the repository to the instance
 
